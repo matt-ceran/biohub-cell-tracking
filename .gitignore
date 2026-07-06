@@ -1,0 +1,25 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Competition data and generated working files.
+data/raw/
+data/working/
+*.zip
+*.zarr/
+*.geff/
+
+# Submission artifacts are reproducible outputs.
+submissions/*.csv
+
+# Temporary render and scratch files.
+tmp/
+
+# Project-local AI memory and personal learning materials (kept local, not published).
+.codex-memory/
+output/pdf/
+scripts/create_*_pdf.py

@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biohub-cell-tracking"
+version = "0.1.0"
+description = "Infrastructure and baseline code for the Biohub cell tracking competition."
+requires-python = ">=3.11"
+dependencies = [
+  "kaggle",
+  "matplotlib",
+  "networkx",
+  "numpy",
+  "pandas",
+  "scikit-image",
+  "scipy",
+  "tqdm",
+  "zarr>=3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "ruff",
+]
+notebooks = [
+  "jupyter",
+]
+docs = [
+  "reportlab",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/create_project_guide_pdf.py" = ["E501"]
+"scripts/create_status_report_pdf.py" = ["E501"]
+"scripts/create_refresher_pdf.py" = ["E501"]
+"scripts/create_phase1_metric_pdf.py" = ["E501"]
+"scripts/create_phase2_baseline_pdf.py" = ["E501"]
