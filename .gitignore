@@ -20,6 +20,11 @@ submissions/*.csv
 tmp/
 
 # Project-local AI memory and personal learning materials (kept local, not published).
+# RULE: anything that is NOT the actual work stays ignored — files/tools whose purpose is
+# the user's own learning, or persisting Claude Code / Codex memory. Add new ones here.
 .codex-memory/
 output/pdf/
 scripts/create_*_pdf.py
+CLAUDE.md
+CLAUDE.local.md
+.claude/
