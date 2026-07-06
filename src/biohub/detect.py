@@ -1,11 +1,23 @@
 """Classical 3D cell-center detection.
 
-This is the baseline detector: no training, just image processing. A cell center
-shows up as a small bright blob against a darker background, so we smooth each 3D
-volume, subtract the local background, and keep bright local maxima as detections.
+Two detector modes share one code path:
 
-The detector is deliberately simple and fully parameterised so the threshold can be
-tuned to produce plausible per-movie cell counts (see the project notes on the node
+* ``"peak"`` (the Phase-2 baseline): smooth each volume, subtract the local
+  background with a white top-hat, and keep bright local maxima. Its threshold is
+  a single intensity value per frame (a percentile, or an absolute number). This is
+  a *global* rule: a dim cell is only found if it out-shines the brightest ~0.5%
+  of the whole frame, so a few bright structures can hide the dim cells entirely.
+
+* ``"dog"`` (Phase-3 adaptive blob detection): compute a Difference-of-Gaussians
+  response, which is a band-pass filter tuned to the cell scale. It reacts to
+  *local contrast* — a blob standing out from its immediate surroundings — not to
+  absolute brightness, so a dim-but-clear cell next to bright junk still produces a
+  clear peak. Its threshold is *adaptive*: ``median + k * robust_sigma`` of the
+  response, i.e. "k noise levels above this frame's own noise floor", which tracks
+  each frame instead of assuming a fixed brightness.
+
+The detector is deliberately simple and fully parameterised so either mode can be
+tuned to produce plausible per-movie cell counts (see the notes on the node
 over-prediction penalty).
 """
 
@@ -20,37 +32,103 @@ from biohub.metric import TrackingGraph
 
 @dataclass(frozen=True)
 class DetectorConfig:
-    """Tunable knobs for the classical detector."""
+    """Tunable knobs for the classical detector.
 
-    smoothing_sigma: float = 1.0  # gaussian blur in voxels before peak finding
-    background_radius: int = 6  # white-tophat radius in voxels; 0 disables background subtraction
+    ``method`` selects the response image: ``"peak"`` (smoothed + top-hat intensity)
+    or ``"dog"`` (Difference-of-Gaussians blob response). The threshold is chosen in
+    priority order: ``threshold_k`` (adaptive k-sigma) if set, else ``threshold_abs``
+    if set, else ``threshold_percentile``.
+    """
+
+    method: str = "peak"  # "peak" | "dog"
     min_distance: int = 3  # minimum voxel separation between two detected centers
+    max_peaks: int | None = None  # optional cap on detections per volume (brightest kept)
+
+    # Shared / peak-mode knobs.
+    smoothing_sigma: float = 1.0  # gaussian blur in voxels before peak finding (peak mode)
+    background_radius: int = 6  # white-tophat radius in voxels; 0 disables background subtraction
+
+    # dog-mode knobs (blobs are bright at the small scale and flat at the large scale).
+    dog_sigma_small: float = 1.0  # inner gaussian, ~cell core in voxels
+    dog_sigma_large: float = 2.0  # outer gaussian, ~local background in voxels
+
+    # Threshold selection.
+    threshold_k: float | None = None  # adaptive: median + k * (1.4826 * MAD) of the response
     threshold_percentile: float = 99.5  # intensity percentile used as the peak threshold
     threshold_abs: float | None = None  # absolute threshold; overrides the percentile when set
-    max_peaks: int | None = None  # optional cap on detections per volume (brightest kept)
 
 
 DEFAULT_DETECTOR = DetectorConfig()
+# Phase-3 adaptive blob preset: local-contrast response with a noise-relative threshold.
+DOG_DETECTOR = DetectorConfig(
+    method="dog",
+    dog_sigma_small=1.0,
+    dog_sigma_large=2.0,
+    threshold_k=4.0,
+)
+
+
+def _peak_response(vol: np.ndarray, smoothing_sigma: float, background_radius: int) -> np.ndarray:
+    """Smoothed, background-subtracted intensity image (the Phase-2 response)."""
+    from scipy.ndimage import gaussian_filter, white_tophat
+
+    if smoothing_sigma > 0:
+        vol = gaussian_filter(vol, sigma=smoothing_sigma)
+    if background_radius > 0:
+        vol = white_tophat(vol, size=background_radius)
+    return vol
+
+
+def _dog_response(vol: np.ndarray, sigma_small: float, sigma_large: float) -> np.ndarray:
+    """Difference-of-Gaussians band-pass response, bright on cell-scale blobs.
+
+    The small blur keeps the cell core; the large blur estimates the local background.
+    Their difference is near zero on flat or slowly-varying regions and peaks on blobs
+    of roughly the cell scale, so it responds to local contrast rather than absolute
+    brightness and needs no separate background subtraction.
+    """
+    from scipy.ndimage import gaussian_filter
+
+    small = gaussian_filter(vol, sigma=sigma_small)
+    large = gaussian_filter(vol, sigma=sigma_large)
+    return small - large
+
+
+def _robust_threshold(response: np.ndarray, k: float) -> float:
+    """Adaptive threshold ``median + k * sigma`` with sigma from the MAD.
+
+    The median absolute deviation (scaled by 1.4826 to match a Gaussian standard
+    deviation) is a robust noise estimate that a handful of bright blobs cannot skew,
+    so ``k`` reads as "how many noise levels above this frame's floor" — the same
+    stringency in a dim frame as in a bright one.
+    """
+    med = float(np.median(response))
+    mad = float(np.median(np.abs(response - med)))
+    sigma = 1.4826 * mad
+    return med + k * sigma
 
 
 def detect_centers(volume: np.ndarray, config: DetectorConfig = DEFAULT_DETECTOR) -> np.ndarray:
     """Detect bright cell centers in one 3D volume, returning (N, 3) z,y,x voxel coords."""
-    from scipy.ndimage import gaussian_filter, white_tophat
     from skimage.feature import peak_local_max
 
     vol = np.asarray(volume, dtype=np.float32)
-    if config.smoothing_sigma > 0:
-        vol = gaussian_filter(vol, sigma=config.smoothing_sigma)
-    if config.background_radius > 0:
-        vol = white_tophat(vol, size=config.background_radius)
+    if config.method == "dog":
+        response = _dog_response(vol, config.dog_sigma_small, config.dog_sigma_large)
+    elif config.method == "peak":
+        response = _peak_response(vol, config.smoothing_sigma, config.background_radius)
+    else:
+        raise ValueError(f"Unknown detector method {config.method!r}; use 'peak' or 'dog'.")
 
-    threshold = (
-        config.threshold_abs
-        if config.threshold_abs is not None
-        else float(np.percentile(vol, config.threshold_percentile))
-    )
+    if config.threshold_k is not None:
+        threshold = _robust_threshold(response, config.threshold_k)
+    elif config.threshold_abs is not None:
+        threshold = config.threshold_abs
+    else:
+        threshold = float(np.percentile(response, config.threshold_percentile))
+
     coords = peak_local_max(
-        vol,
+        response,
         min_distance=config.min_distance,
         threshold_abs=threshold,
         num_peaks=config.max_peaks if config.max_peaks is not None else np.inf,
