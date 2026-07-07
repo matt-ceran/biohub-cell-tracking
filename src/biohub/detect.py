@@ -14,7 +14,9 @@ Two detector modes share one code path:
   absolute brightness, so a dim-but-clear cell next to bright junk still produces a
   clear peak. Its threshold is *adaptive*: ``median + k * robust_sigma`` of the
   response, i.e. "k noise levels above this frame's own noise floor", which tracks
-  each frame instead of assuming a fixed brightness.
+  each frame instead of assuming a fixed brightness. Lowering ``k`` recovers fainter
+  cells but admits more false detections (the Phase-5 recall/over-prediction trade-off);
+  ``max_peaks`` caps the count by keeping the strongest responses per volume.
 
 The detector is deliberately simple and fully parameterised so either mode can be
 tuned to produce plausible per-movie cell counts (see the notes on the node
@@ -37,7 +39,8 @@ class DetectorConfig:
     ``method`` selects the response image: ``"peak"`` (smoothed + top-hat intensity)
     or ``"dog"`` (Difference-of-Gaussians blob response). The threshold is chosen in
     priority order: ``threshold_k`` (adaptive k-sigma) if set, else ``threshold_abs``
-    if set, else ``threshold_percentile``.
+    if set, else ``threshold_percentile``. ``max_peaks`` optionally caps detections per
+    volume, keeping the strongest responses (the over-prediction knob).
     """
 
     method: str = "peak"  # "peak" | "dog"
@@ -65,6 +68,18 @@ DOG_DETECTOR = DetectorConfig(
     dog_sigma_small=1.0,
     dog_sigma_large=2.0,
     threshold_k=4.0,
+)
+# Phase-5 high-recall preset: a lower bar (k=3) recovers the faint, contrast-limited
+# cells the k=4 detector misses -- local flow edge Jaccard 0.573 -> 0.629 across the 6
+# validation movies (144b256d 0.32 -> 0.59). It is NOT the default: the gain rides on
+# ~25-55% more detections, which the real competition node score penalises and which
+# strength-capping cannot trim without discarding the same faint cells (see the
+# calibration experiments note). Bank it via linker-aware pruning before shipping.
+HIGH_RECALL_DETECTOR = DetectorConfig(
+    method="dog",
+    dog_sigma_small=1.0,
+    dog_sigma_large=2.0,
+    threshold_k=3.0,
 )
 
 

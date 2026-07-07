@@ -86,6 +86,28 @@ def test_dog_finds_dim_blob_that_global_threshold_misses():
     assert _found_within(dog, bright) and _found_within(dog, dim), "dog should find both blobs"
 
 
+def test_max_peaks_caps_per_volume_keeping_strongest():
+    """The ``max_peaks`` cap keeps the N strongest-response detections per volume — the
+    Phase-5 knob for reining in over-prediction after lowering the threshold."""
+    from scipy.ndimage import gaussian_filter
+
+    shape = (16, 64, 64)
+    blobs = {(8, 20, 20): 4000.0, (8, 20, 45): 3000.0, (4, 45, 30): 800.0}
+    vol = np.zeros(shape, dtype=np.float32)
+    for (z, y, x), amp in blobs.items():
+        vol[z, y, x] = amp
+    vol = gaussian_filter(vol, sigma=1.5) + 20.0
+    rng = np.random.default_rng(2)
+    vol = vol + rng.normal(0.0, 3.0, size=vol.shape).astype(np.float32)
+
+    cfg = DetectorConfig(method="dog", threshold_k=3.0, max_peaks=2)
+    capped = detect_centers(vol, cfg)
+    assert len(capped) == 2
+    # The dropped one should be the weakest blob, not one of the two bright ones.
+    assert not _found_within(capped, (4, 45, 30))
+    assert _found_within(capped, (8, 20, 20)) and _found_within(capped, (8, 20, 45))
+
+
 def test_unknown_detector_method_raises():
     vol = _volume_with_blobs([(8, 20, 20)])
     try:
