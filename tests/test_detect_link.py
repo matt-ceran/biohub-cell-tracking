@@ -10,8 +10,12 @@ from biohub.detect import (
     detect_centers,
     detect_movie,
 )
-from biohub.link import link_graph
+from biohub.link import link_graph, link_graph_flow
 from biohub.metric import TrackingGraph
+
+# Identity scale so voxel coordinates equal micrometers, making distances easy to reason
+# about in the linker tests below.
+UNIT_SCALE = {"z": 1.0, "y": 1.0, "x": 1.0}
 
 
 def _volume_with_blobs(centers, shape=(16, 64, 64), peak=2000.0, sigma=1.5):
@@ -133,3 +137,71 @@ def test_linker_respects_the_gate():
     )
     linked = link_graph(nodes, max_distance_um=8.0)
     assert linked.edges.shape == (0, 2)
+
+
+def _nodes(rows):
+    """Build a node-only TrackingGraph from (node_id, t, z, y, x) rows."""
+    rows = list(rows)
+    return TrackingGraph(
+        node_ids=np.array([r[0] for r in rows], dtype=np.int64),
+        t=np.array([r[1] for r in rows]),
+        z=np.array([r[2] for r in rows], dtype=float),
+        y=np.array([r[3] for r in rows], dtype=float),
+        x=np.array([r[4] for r in rows], dtype=float),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+
+
+def test_flow_linker_connects_a_moving_cell():
+    # The whole-movie flow linker should also chain a single drifting cell.
+    nodes = _nodes([(1, 0, 0.0, 10.0, 10.0), (2, 1, 0.0, 12.0, 10.0), (3, 2, 0.0, 14.0, 10.0)])
+    linked = link_graph_flow(nodes, scale=UNIT_SCALE)
+    assert {tuple(e) for e in linked.edges} == {(1, 2), (2, 3)}
+
+
+def test_flow_linker_respects_the_gate():
+    # Two cells one frame apart but beyond the gate have no plausible hop, so no edge.
+    nodes = _nodes([(1, 0, 0.0, 10.0, 10.0), (2, 1, 0.0, 200.0, 200.0)])
+    linked = link_graph_flow(nodes, scale=UNIT_SCALE)
+    assert linked.edges.shape == (0, 2)
+
+
+def test_flow_linker_resists_a_distractor_that_greedy_falls_for():
+    """The key Phase-4 property: a junk detection sitting closer to the cell than its
+    true continuation steals the greedy per-frame link, but the whole-movie flow keeps
+    the true, continuous track because dead-ending it through the junk costs more overall.
+
+    Layout (micrometers): a cell A0->A1->A2 drifts straight along x; a junk detection J1
+    sits nearer to A0 than A1 is, but off the track's line so it leads nowhere.
+    """
+    nodes = _nodes(
+        [
+            (10, 0, 0.0, 0.0, 0.0),  # A0
+            (11, 1, 0.0, 0.0, 3.0),  # A1  true continuation (3 um from A0)
+            (99, 1, 0.0, 2.0, 0.0),  # J1  junk, only 2 um from A0 but off the line
+            (12, 2, 0.0, 0.0, 6.0),  # A2  continues the straight track
+        ]
+    )
+
+    greedy = {tuple(e) for e in link_graph(nodes, scale=UNIT_SCALE).edges}
+    # Greedy links A0 to the nearer junk and never recovers the true A0->A1 edge.
+    assert (10, 99) in greedy
+    assert (10, 11) not in greedy
+
+    # With a firm end-cost (the precision knob), the flow prefers one clean A0->A1->A2
+    # track and leaves the junk unused: dead-ending the track through J1 would pay an
+    # extra birth + death that outweighs the shorter first hop.
+    flow = {tuple(e) for e in link_graph_flow(nodes, end_cost_um=8.0, scale=UNIT_SCALE).edges}
+    assert flow == {(10, 11), (11, 12)}
+
+
+def test_flow_linker_can_close_a_one_frame_gap_when_enabled():
+    """Gap-closing is off by default (dense labels need no skips) but works when asked:
+    a cell detected at t=0 and t=2 with nothing at t=1 links only when max_gap >= 2."""
+    nodes = _nodes([(1, 0, 0.0, 0.0, 0.0), (2, 2, 0.0, 0.0, 3.0)])
+
+    no_gap = link_graph_flow(nodes, max_gap=1, scale=UNIT_SCALE)
+    assert no_gap.edges.shape == (0, 2)
+
+    with_gap = link_graph_flow(nodes, max_gap=2, scale=UNIT_SCALE)
+    assert {tuple(e) for e in with_gap.edges} == {(1, 2)}
