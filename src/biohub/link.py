@@ -220,3 +220,54 @@ def link_graph_flow(
         x=nodes.x,
         edges=edge_array,
     )
+
+
+def prune_to_tracks(linked: TrackingGraph, min_track_length: int = 2) -> TrackingGraph:
+    """Keep only detections that link into a track of at least ``min_track_length`` nodes.
+
+    A linked graph's edges form tracks: because each detection carries at most one unit of
+    identity, every node has at most one predecessor and one successor, so the connected
+    components of the (undirected) edge graph are simple paths -- the tracks. Their node
+    count is the track length.
+
+    This is linker-aware pruning: a real cell persists across frames and links into a
+    multi-node track, whereas a junk detection tends to stay isolated or form only a short
+    stub. Dropping the short components therefore ranks detections by *track participation*
+    rather than raw response strength -- the one signal that separates faint-but-real cells
+    (which a strength cap would wrongly discard) from junk.
+
+    With the default ``min_track_length=2`` only edgeless nodes are removed, so no edge is
+    dropped and the edge score is unchanged -- the node count simply falls. Larger
+    thresholds trim short tracks too, cutting more nodes at the cost of any true short
+    tracks' edges.
+    """
+    import networkx as nx
+
+    node_ids = np.asarray(linked.node_ids)
+    if node_ids.size == 0:
+        return linked
+    edges = np.asarray(linked.edges).reshape(-1, 2)
+
+    graph = nx.Graph()
+    graph.add_nodes_from(int(i) for i in node_ids)
+    graph.add_edges_from((int(a), int(b)) for a, b in edges)
+    keep: set[int] = set()
+    for component in nx.connected_components(graph):
+        if len(component) >= min_track_length:
+            keep.update(component)
+
+    node_mask = np.array([int(i) in keep for i in node_ids], dtype=bool)
+    if edges.size:
+        edge_mask = np.array([int(a) in keep and int(b) in keep for a, b in edges], dtype=bool)
+        kept_edges = edges[edge_mask].astype(np.int64)
+    else:
+        kept_edges = np.empty((0, 2), dtype=np.int64)
+
+    return TrackingGraph(
+        node_ids=node_ids[node_mask],
+        t=np.asarray(linked.t)[node_mask],
+        z=np.asarray(linked.z)[node_mask],
+        y=np.asarray(linked.y)[node_mask],
+        x=np.asarray(linked.x)[node_mask],
+        edges=kept_edges,
+    )

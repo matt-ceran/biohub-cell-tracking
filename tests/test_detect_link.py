@@ -10,7 +10,7 @@ from biohub.detect import (
     detect_centers,
     detect_movie,
 )
-from biohub.link import link_graph, link_graph_flow
+from biohub.link import link_graph, link_graph_flow, prune_to_tracks
 from biohub.metric import TrackingGraph
 
 # Identity scale so voxel coordinates equal micrometers, making distances easy to reason
@@ -215,6 +215,46 @@ def test_flow_linker_resists_a_distractor_that_greedy_falls_for():
     # extra birth + death that outweighs the shorter first hop.
     flow = {tuple(e) for e in link_graph_flow(nodes, end_cost_um=8.0, scale=UNIT_SCALE).edges}
     assert flow == {(10, 11), (11, 12)}
+
+
+def test_prune_to_tracks_drops_isolated_junk_but_keeps_the_track():
+    """A drifting cell (a real 3-node track) plus an isolated junk detection: default
+    pruning (min_track_length=2) removes the junk and keeps the track, and because the
+    junk had no edge, every edge survives."""
+    nodes = _nodes(
+        [
+            (1, 0, 0.0, 10.0, 10.0),  # A0 ┐
+            (2, 1, 0.0, 12.0, 10.0),  # A1 ├ one real track
+            (3, 2, 0.0, 14.0, 10.0),  # A2 ┘
+            (99, 1, 0.0, 200.0, 200.0),  # junk, far from everything -> no link
+        ]
+    )
+    linked = link_graph_flow(nodes, scale=UNIT_SCALE)
+    assert 99 in set(linked.node_ids)  # junk survives linking as an isolated node
+
+    pruned = prune_to_tracks(linked, min_track_length=2)
+    assert set(pruned.node_ids) == {1, 2, 3}  # junk dropped, track kept
+    assert {tuple(e) for e in pruned.edges} == {(1, 2), (2, 3)}  # no edge lost
+
+
+def test_prune_to_tracks_min_length_three_drops_a_two_node_track():
+    """A stricter threshold trims short tracks too: a 2-node track is removed (with its
+    edge) when min_track_length=3, while a 3-node track is kept."""
+    nodes = _nodes(
+        [
+            (1, 0, 0.0, 10.0, 10.0),  # 3-node track
+            (2, 1, 0.0, 12.0, 10.0),
+            (3, 2, 0.0, 14.0, 10.0),
+            (10, 0, 0.0, 50.0, 50.0),  # 2-node track, far from the first
+            (11, 1, 0.0, 52.0, 50.0),
+        ]
+    )
+    linked = link_graph_flow(nodes, scale=UNIT_SCALE)
+    assert {tuple(e) for e in linked.edges} == {(1, 2), (2, 3), (10, 11)}
+
+    pruned = prune_to_tracks(linked, min_track_length=3)
+    assert set(pruned.node_ids) == {1, 2, 3}
+    assert {tuple(e) for e in pruned.edges} == {(1, 2), (2, 3)}
 
 
 def test_flow_linker_can_close_a_one_frame_gap_when_enabled():
