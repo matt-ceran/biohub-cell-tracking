@@ -19,6 +19,14 @@ same cell. Two linkers live here.
   one hop, it resists distraction: routing a real track through a junk detection forces
   that track to dead-end (a death fee) and the real continuation to restart (a birth
   fee), so the globally cheapest solution prefers the true, continuous track.
+
+Both linkers give every detection at most one successor (each carries a single unit of
+identity), so their output is a set of simple paths -- they *cannot* represent a cell
+division, where one mother has two children. ``add_divisions`` is the post-linking step
+that puts forks back: at a real mitosis the flow linker keeps the mother's cheapest
+continuation and leaves the second daughter orphaned (often just beyond the link gate),
+so the classifier re-attaches an orphan that sits on the *opposite* side of the mother
+from the kept child -- the "daughters push apart" geometry mined from the training graphs.
 """
 
 from __future__ import annotations
@@ -26,7 +34,13 @@ from __future__ import annotations
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from biohub.constants import LINK_MAX_UM, VOXEL_SCALE_UM
+from biohub.constants import (
+    DIVISION_MAX_UM,
+    DIVISION_MIN_ANGLE_DEG,
+    DIVISION_MIN_CHILD_UM,
+    LINK_MAX_UM,
+    VOXEL_SCALE_UM,
+)
 from biohub.metric import TrackingGraph
 
 # Phase-4 flow-linker defaults, in micrometer-equivalent units.
@@ -270,4 +284,143 @@ def prune_to_tracks(linked: TrackingGraph, min_track_length: int = 2) -> Trackin
         y=np.asarray(linked.y)[node_mask],
         x=np.asarray(linked.x)[node_mask],
         edges=kept_edges,
+    )
+
+
+def _oriented_adjacency(
+    node_ids: np.ndarray, t: np.ndarray, edges: np.ndarray
+) -> tuple[dict[int, list[int]], dict[int, int]]:
+    """Return ``successors`` (id -> children ids, oriented earlier->later) and ``in_degree``."""
+    t_by_id = {int(i): float(tv) for i, tv in zip(node_ids, t, strict=True)}
+    successors: dict[int, list[int]] = {}
+    in_degree: dict[int, int] = {}
+    for a, b in edges.reshape(-1, 2):
+        a, b = int(a), int(b)
+        if t_by_id.get(b, 0.0) < t_by_id.get(a, 0.0):
+            a, b = b, a  # keep the earlier endpoint as the parent
+        successors.setdefault(a, []).append(b)
+        in_degree[b] = in_degree.get(b, 0) + 1
+    return successors, in_degree
+
+
+def add_divisions(
+    linked: TrackingGraph,
+    max_distance_um: float = DIVISION_MAX_UM,
+    min_child_um: float = DIVISION_MIN_CHILD_UM,
+    min_angle_deg: float = DIVISION_MIN_ANGLE_DEG,
+    require_daughter_future: bool = True,
+    require_mother_history: bool = True,
+    scale: dict[str, float] = VOXEL_SCALE_UM,
+) -> TrackingGraph:
+    """Re-attach orphaned daughters to their mothers, turning single tracks into forks.
+
+    A linked graph is a set of simple tracks: each detection has at most one successor, so
+    a cell division (one mother, two children) cannot appear. At a real mitosis the flow
+    linker keeps the mother's single cheapest continuation ``D1`` and leaves the second
+    daughter ``D2`` as an orphan -- a fresh track start with no parent, frequently just
+    beyond the 8 um link gate because daughters spring apart faster than a cell drifts.
+
+    This step looks for exactly that pattern and adds the missing ``mother -> D2`` edge, so
+    the mother becomes a two-child division node. A candidate is accepted only when every
+    geometric prior mined from the training divisions holds, which keeps the classifier
+    conservative -- divisions are rare (~0.2 per movie) and a false fork costs the dominant
+    edge score, not just the small division score:
+
+    * ``D2`` is an orphan (no parent) at the same timepoint as the kept child ``D1``;
+    * BOTH children lie between ``min_child_um`` and ``max_distance_um`` of the mother --
+      the lower bound is the key precision gate: a real mother makes an anomalously long
+      jump to each daughter (~5.8 um), so it rejects the far more common case of a cell
+      merely drifting a normal ~1.8 um step that happens to have an opposite orphan;
+    * the angle ``D1 - mother`` to ``D2 - mother`` is at least ``min_angle_deg`` -- the
+      daughters move to opposite sides, the "push apart" signal (true median ~138 deg);
+    * ``require_daughter_future``: ``D2`` itself continues into a later frame (a real
+      daughter lives on; a one-off detection is likely junk);
+    * ``require_mother_history``: the mother has a parent (it is mid-track, not a fresh
+      birth masquerading as a divider).
+
+    Each mother adopts at most one orphan and each orphan is adopted once; when several
+    orphans qualify the most opposite (largest angle, then nearest) wins. Returns a new
+    :class:`TrackingGraph` with the same nodes and the extra division edges added.
+
+    Note: even at these gates the classifier is a dormant lever, not part of the shipped
+    pipeline. Over the current over-predicted linkage the true forks are not separable from
+    coincidental ones (~3 matched false positives per movie survive every recall-preserving
+    gate), and because an empty division set already scores a perfect Jaccard on the ~63%
+    of movies that contain no division, any firing there is a guaranteed loss. See the
+    Phase-7 experiment note for the full frontier.
+    """
+    node_ids = np.asarray(linked.node_ids)
+    edges = np.asarray(linked.edges).reshape(-1, 2)
+    if node_ids.size == 0:
+        return linked
+
+    coords = _scaled(linked, scale)
+    t = np.asarray(linked.t)
+    row_of = {int(i): k for k, i in enumerate(node_ids)}
+    t_by_id = {int(i): int(tv) for i, tv in zip(node_ids, t, strict=True)}
+    successors, in_degree = _oriented_adjacency(node_ids, t, edges)
+
+    def out_degree(i: int) -> int:
+        return len(successors.get(i, ()))
+
+    # Orphans (no parent) grouped by timepoint, so a mother only scans its child's frame.
+    orphans_by_t: dict[int, list[int]] = {}
+    for i in node_ids:
+        i = int(i)
+        if in_degree.get(i, 0) == 0:
+            orphans_by_t.setdefault(t_by_id[i], []).append(i)
+
+    cos_max = np.cos(np.radians(min_angle_deg))  # angle >= min  <=>  cos <= cos_max
+
+    # Score every (mother, orphan) fork that clears the priors, then assign greedily.
+    candidates: list[tuple[float, float, int, int]] = []  # (-angle_key, dist, mother, orphan)
+    for mother in node_ids:
+        mother = int(mother)
+        children = successors.get(mother, [])
+        if len(children) != 1:
+            continue  # already forked, or a track end -- only extend a single continuation
+        if require_mother_history and in_degree.get(mother, 0) == 0:
+            continue
+        d1 = children[0]
+        pm = coords[row_of[mother]]
+        v1 = coords[row_of[d1]] - pm
+        n1 = float(np.linalg.norm(v1))
+        if n1 < min_child_um or n1 > max_distance_um:
+            continue  # kept child too close (a normal drift) or beyond reach
+        for orphan in orphans_by_t.get(t_by_id[d1], ()):
+            if orphan == d1:
+                continue
+            if require_daughter_future and out_degree(orphan) == 0:
+                continue
+            v2 = coords[row_of[orphan]] - pm
+            n2 = float(np.linalg.norm(v2))
+            if n2 < min_child_um or n2 > max_distance_um:
+                continue
+            cosine = float(np.dot(v1, v2) / (n1 * n2))
+            if cosine > cos_max:
+                continue  # daughters not opposite enough
+            candidates.append((cosine, n2, mother, orphan))
+
+    candidates.sort(key=lambda c: (c[0], c[1]))  # most opposite first, then nearest
+    used_mothers: set[int] = set()
+    used_orphans: set[int] = set()
+    new_edges: list[tuple[int, int]] = []
+    for _cos, _dist, mother, orphan in candidates:
+        if mother in used_mothers or orphan in used_orphans:
+            continue
+        used_mothers.add(mother)
+        used_orphans.add(orphan)
+        new_edges.append((mother, orphan))
+
+    if not new_edges:
+        return linked
+
+    combined = np.vstack([edges.astype(np.int64), np.array(new_edges, dtype=np.int64)])
+    return TrackingGraph(
+        node_ids=linked.node_ids,
+        t=linked.t,
+        z=linked.z,
+        y=linked.y,
+        x=linked.x,
+        edges=combined,
     )

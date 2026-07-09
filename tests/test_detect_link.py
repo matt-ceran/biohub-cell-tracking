@@ -10,7 +10,7 @@ from biohub.detect import (
     detect_centers,
     detect_movie,
 )
-from biohub.link import link_graph, link_graph_flow, prune_to_tracks
+from biohub.link import add_divisions, link_graph, link_graph_flow, prune_to_tracks
 from biohub.metric import TrackingGraph
 
 # Identity scale so voxel coordinates equal micrometers, making distances easy to reason
@@ -255,6 +255,91 @@ def test_prune_to_tracks_min_length_three_drops_a_two_node_track():
     pruned = prune_to_tracks(linked, min_track_length=3)
     assert set(pruned.node_ids) == {1, 2, 3}
     assert {tuple(e) for e in pruned.edges} == {(1, 2), (2, 3)}
+
+
+def _graph(rows, edges):
+    """Build a TrackingGraph from (node_id, t, z, y, x) rows and (source, target) edges."""
+    g = _nodes(rows)
+    return TrackingGraph(
+        node_ids=g.node_ids, t=g.t, z=g.z, y=g.y, x=g.x,
+        edges=np.array(edges, dtype=np.int64).reshape(-1, 2),
+    )
+
+
+# A mother mid-track (P->M) keeps one child D1 that springs 5 um to +x and continues
+# (D1->D1b); the second daughter D2 is an orphan (no parent) 5 um to the -x side that lives
+# on (D2->D2b). Both children clear the 4 um division-scale gate and are 180 deg apart --
+# the post-linker fingerprint of a real division that add_divisions should stitch together.
+_DIV_ROWS = [
+    (1, 0, 0.0, 0.0, 0.0),   # P  (mother's parent -> mother has history)
+    (2, 1, 0.0, 0.0, 0.0),   # M  mother
+    (3, 2, 0.0, 0.0, 5.0),   # D1 kept child, +x (5 um jump)
+    (4, 3, 0.0, 0.0, 9.0),   # D1b D1's continuation
+    (5, 2, 0.0, 0.0, -5.0),  # D2 orphan daughter, -x (opposite, 5 um jump)
+    (6, 3, 0.0, 0.0, -9.0),  # D2b D2's continuation
+]
+_DIV_EDGES = [(1, 2), (2, 3), (3, 4), (5, 6)]
+
+
+def _out_deg(graph, node):
+    return sum(1 for s, _ in graph.edges if int(s) == node)
+
+
+def test_add_divisions_recovers_an_orphaned_daughter():
+    graph = _graph(_DIV_ROWS, _DIV_EDGES)
+    forked = add_divisions(graph, scale=UNIT_SCALE)
+    pairs = {tuple(e) for e in forked.edges}
+    assert (2, 5) in pairs  # the missing mother->second-daughter edge is restored
+    assert _out_deg(forked, 2) == 2  # the mother is now a two-child division node
+
+
+def test_add_divisions_ignores_a_same_side_neighbor():
+    """An orphan on the SAME side as the kept child is ordinary crowding, not a fork:
+    the daughters-move-apart angle test must reject it."""
+    rows = list(_DIV_ROWS)
+    rows[4] = (5, 2, 0.0, 0.0, 5.0)   # D2 moved to +x, same side as D1 (angle ~0)
+    rows[5] = (6, 3, 0.0, 0.0, 9.0)
+    forked = add_divisions(_graph(rows, _DIV_EDGES), scale=UNIT_SCALE)
+    assert _out_deg(forked, 2) == 1  # no fork added
+
+
+def test_add_divisions_respects_the_distance_gate():
+    rows = list(_DIV_ROWS)
+    rows[4] = (5, 2, 0.0, 0.0, -15.0)  # opposite but 15 um away, beyond the 10 um gate
+    rows[5] = (6, 3, 0.0, 0.0, -18.0)
+    forked = add_divisions(_graph(rows, _DIV_EDGES), scale=UNIT_SCALE)
+    assert _out_deg(forked, 2) == 1
+
+
+def test_add_divisions_ignores_a_normal_drift_continuation():
+    """The precision gate: a mother whose kept child is a normal ~2 um drift is not a
+    divider even with an opposite orphan, because a real mother springs both daughters a
+    division-scale distance away. Both children must clear min_child_um."""
+    rows = list(_DIV_ROWS)
+    rows[2] = (3, 2, 0.0, 0.0, 2.0)   # D1 only 2 um away -- a normal drift, below 4 um
+    rows[3] = (4, 3, 0.0, 0.0, 4.0)
+    forked = add_divisions(_graph(rows, _DIV_EDGES), scale=UNIT_SCALE)
+    assert _out_deg(forked, 2) == 1  # kept child too close -> not a division
+
+
+def test_add_divisions_requires_the_daughter_to_live_on():
+    """A well-placed orphan that never continues (out-degree 0) is likely junk; it is
+    adopted only when the daughter-future requirement is relaxed."""
+    edges = [(1, 2), (2, 3), (3, 4)]  # drop D2->D2b, so D2 has no future
+    graph = _graph(_DIV_ROWS, edges)
+    assert _out_deg(add_divisions(graph, scale=UNIT_SCALE), 2) == 1
+    relaxed = add_divisions(graph, require_daughter_future=False, scale=UNIT_SCALE)
+    assert (2, 5) in {tuple(e) for e in relaxed.edges}
+
+
+def test_add_divisions_needs_a_mother_with_history():
+    """A fresh birth (no parent) is not allowed to divide by default, guarding against a
+    two-node stub being read as a mother."""
+    edges = [(2, 3), (3, 4), (5, 6)]  # drop P->M, so the mother has no parent
+    graph = _graph(_DIV_ROWS, edges)
+    assert _out_deg(add_divisions(graph, scale=UNIT_SCALE), 2) == 1
+    relaxed = add_divisions(graph, require_mother_history=False, scale=UNIT_SCALE)
+    assert (2, 5) in {tuple(e) for e in relaxed.edges}
 
 
 def test_flow_linker_can_close_a_one_frame_gap_when_enabled():
