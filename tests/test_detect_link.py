@@ -87,7 +87,7 @@ def test_dog_finds_dim_blob_that_global_threshold_misses():
 
 
 def test_max_peaks_caps_per_volume_keeping_strongest():
-    """The ``max_peaks`` cap keeps the N strongest-response detections per volume — the
+    """The ``max_peaks`` cap keeps the N strongest-response detections per volume - the
     Phase-5 knob for reining in over-prediction after lowering the threshold."""
     from scipy.ndimage import gaussian_filter
 

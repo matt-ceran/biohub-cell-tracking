@@ -10,7 +10,7 @@ Two detector modes share one code path:
 
 * ``"dog"`` (Phase-3 adaptive blob detection): compute a Difference-of-Gaussians
   response, which is a band-pass filter tuned to the cell scale. It reacts to
-  *local contrast* — a blob standing out from its immediate surroundings — not to
+  *local contrast* - a blob standing out from its immediate surroundings - not to
   absolute brightness, so a dim-but-clear cell next to bright junk still produces a
   clear peak. Its threshold is *adaptive*: ``median + k * robust_sigma`` of the
   response, i.e. "k noise levels above this frame's own noise floor", which tracks
@@ -114,7 +114,7 @@ def _robust_threshold(response: np.ndarray, k: float) -> float:
 
     The median absolute deviation (scaled by 1.4826 to match a Gaussian standard
     deviation) is a robust noise estimate that a handful of bright blobs cannot skew,
-    so ``k`` reads as "how many noise levels above this frame's floor" — the same
+    so ``k`` reads as "how many noise levels above this frame's floor" - the same
     stringency in a dim frame as in a bright one.
     """
     med = float(np.median(response))
