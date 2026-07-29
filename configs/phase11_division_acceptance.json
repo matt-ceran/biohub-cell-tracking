@@ -1,0 +1,82 @@
+{
+  "applies_to": [
+    "development_unlock",
+    "locked_evaluation_acceptance"
+  ],
+  "cohort": {
+    "division_movies": 10,
+    "labelled_divisions": 18,
+    "movie_count": 20,
+    "no_division_movies": 10
+  },
+  "contract_name": "phase11_division_acceptance",
+  "cross_contract_sha256": {
+    "proposal": "83ec5cb8818cab4470cc00c90e3d34aa23d01bcd90e2f4619031bc17a7630f80",
+    "sampling": "35cc862afb4c87bcdd975e6662fe3e0716a768bc906eebd3c815fb2c630a3806",
+    "split": "974cda6c2cc907c0ac71af93ee969bcd151bb42b0ad56343a307aa2942ba6ecb"
+  },
+  "diagnostics": [
+    "median_full_score_delta",
+    "median_edge_jaccard_delta",
+    "edge_wins_ties_losses",
+    "full_score_wins_ties_losses",
+    "worst_movie",
+    "micro_division_counts",
+    "unmatched_accepted_forks",
+    "restored_nodes",
+    "removed_edges",
+    "added_edges"
+  ],
+  "division_acceptance_schema_version": 1,
+  "evaluation_access": {
+    "development_must_pass_every_guard": true,
+    "evaluation_remains_unread_if_development_fails": true,
+    "evaluation_tuning_permitted": false
+  },
+  "guards": {
+    "aggregate_node_ratio_delta": {
+      "operator": "<=",
+      "value": 0.001
+    },
+    "complete_cohort_movies": {
+      "operator": "==",
+      "value": 20
+    },
+    "full_score_wins_vs_losses": {
+      "left": "wins",
+      "operator": ">",
+      "right": "losses"
+    },
+    "fully_matched_wrong_forks": {
+      "operator": "==",
+      "value": 0
+    },
+    "matched_division_false_positives_per_no_division_movie": {
+      "movie_count": 10,
+      "operator": "==",
+      "value": 0
+    },
+    "mean_edge_jaccard_delta": {
+      "operator": ">=",
+      "value": -0.001
+    },
+    "mean_full_score_delta": {
+      "operator": ">=",
+      "value": 0.001
+    },
+    "no_fork_fallback_identity": {
+      "operator": "logical_graph_sha256_equal",
+      "value": true
+    },
+    "strict_true_recoveries": {
+      "operator": ">=",
+      "value": 1
+    }
+  },
+  "source_fingerprints": {
+    "division_data_sha256": "5463fc33a577ed53decc25c0b05f21a90f2bea04286e1a83a80a7fb1847b1026",
+    "freeze_division_contracts_sha256": "b3d236911f4262e8896464d7a2ea4cc543e87f2e33c4114f1cac29481a6eb006",
+    "io_sha256": "8511fc19f4acd4981d495fb8d1d0f3896824919dc5b1e6f37b60d6192553f289",
+    "metric_sha256": "1e935ceb00e26705ff1ccc7a548547dd4742a8ea5f74ae7e0d03eac29ee03dd2"
+  }
+}

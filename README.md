@@ -10,7 +10,14 @@ The retained pipeline uses DoG k=3 proposals, a CNN score threshold of 0.20, who
 It improved mean local edge Jaccard from 0.668489 to 0.674186 while reducing aggregate predicted-to-estimated node ratio from 1.446x to 1.303x and raising sparse-label recall from 0.876371 to 0.894906.
 The learned policy won, tied, and lost on 36, 4, and 31 movies respectively, and its median edge Jaccard was slightly lower, so the improvement is real but modest and heterogeneous.
 Geometric division repair remains off because it measured as a net loss.
-The next modeling target is learned mother-and-daughter appearance, alongside submission packaging and runtime hardening.
+Phase 11 reproduced the frozen Phase 10 path on all 13 internal-development movies and audited 18 sparse labelled divisions.
+All 18 mother-and-two-daughter triplets existed at raw DoG, 16 survived the CNN filter, only 4 formed a correct linked-daughter plus orphan-daughter triplet before pruning, and none retained that structure after minimum-length-6 pruning.
+A broader pre-prune pair audit recovered all 18 events only by using filtered mothers, raw-scored daughter candidates within 16 micrometers, and up to 12 nearest candidates per mother.
+That smallest full-coverage rule still produced 22,308,810 proposals on 13 movies, so Phase 11 now freezes the split, proposal, sampling, full-score acceptance, and fork-assignment contracts before fitting any division head.
+The frozen `6bba` split contains 88 fit movies, 20 development movies, and 20 locked evaluation movies.
+The current-source fit and development cache runs produced 108 strictly validated node caches containing 8,121,994 candidates, while evaluation remains unopened.
+The next execution step is to build the sampled fit dataset and fit-only feature schema from the 88 fit caches.
+No division head has been production-trained and no development policy has been selected yet.
 
 ## Layout
 
@@ -119,6 +126,82 @@ It refuses manual threshold changes, partial cohorts, or mismatched source and c
 ```
 
 The final comparison is stored in `data/working/phase10_locked_comparison.json`.
+
+## Mother-To-Daughter Proposal Audit
+
+The first Phase 11 slice preserves the accepted Phase 10 pipeline and measures where labelled division evidence disappears before any new model is trained.
+It reuses the exact Phase 10 candidate-score caches, verifies all frozen SHA-256 identities, reruns filtering and linking, and refuses a movie whose divisions-off graph does not reproduce its saved Phase 10 result.
+
+Run the complete 13-movie internal audit.
+
+```bash
+.venv/bin/python -u scripts/audit_division_proposals.py \
+  --output-dir data/working/phase11_division_audit/full13_orphan
+```
+
+The generated event, proposal, movie, and summary artifacts stay under ignored `data/working/` paths.
+The measured result rejects a post-prune orphan-only scorer because its labelled proposal recall is 0 of 18.
+Division evidence must be generated before pruning, and current parent ownership, orphan status, distance, angle, and track context must be treated as features rather than final geometric acceptance rules.
+
+The second Phase 11 audit removes the current-child and orphan prerequisites and evaluates a frozen grid of unordered daughter-pair rules.
+It keeps mothers in the CNN-filtered pre-prune graph while comparing filtered daughters with tightly local raw-scored daughters.
+
+```bash
+.venv/bin/python -u scripts/audit_division_pair_proposals.py \
+  --output-dir data/working/phase11_division_audit/full13_pairs
+```
+
+The smallest rule retaining all 18 labelled events uses a 16 micrometer maximum distance, no minimum distance or angle gate, and at most 12 nearest candidates per mother.
+It produces 22,308,810 raw-scored proposals from 362,366 unique proposed mothers.
+The same geometry over filtered candidates covers 16 of 18 events with 18,210,993 proposals.
+All three no-labelled-division controls contain proposals, totaling 3,331,415 under the selected raw-scored rule.
+This is a bounded high-recall proposal contract, not a fork-acceptance rule or a default un-sampled training table.
+
+## Learned Division Pipeline
+
+The Phase 11 implementation keeps the accepted Phase 10 appearance encoder frozen.
+Each cache stores candidate positions, cellness scores, 64-value appearance embeddings, and intensity summaries so later work can build division records without running the 3D CNN again.
+The exact split and cache provenance are checked before any movie is read.
+
+Build the frozen fit and development cache cohorts.
+
+```bash
+.venv/bin/python -u scripts/build_division_cache.py \
+  --role fit \
+  --batch-size 128 \
+  --device mps
+
+.venv/bin/python -u scripts/build_division_cache.py \
+  --role development \
+  --batch-size 128 \
+  --device mps
+```
+
+Build the bounded sampled fit dataset and learn normalization statistics only from fit records.
+
+```bash
+.venv/bin/python -u scripts/build_division_dataset.py --fit
+```
+
+Train the fixed three-head ladder for exactly 100 production epochs per head.
+The scalar head uses only the 58 context values, the embedding-linear head uses all 314 values with one linear decision layer, and the embedding-MLP32 head uses all 314 values with one 32-unit hidden layer.
+
+```bash
+.venv/bin/python -u scripts/train_division.py --all --device mps
+```
+
+Run the complete 660-row development grid, then freeze the best policy only if every declared guard passes.
+If no policy passes, the freezer records `evaluation_unlocked=false` and the accepted divisions-off fallback remains unchanged.
+
+```bash
+.venv/bin/python -u scripts/validate_division_model.py \
+  --cohort development \
+  --device mps
+
+.venv/bin/python scripts/freeze_division_policy.py
+```
+
+The locked evaluation cohort cannot be cached or inspected until strict replay of the exact frozen development result authorizes it.
 
 ## First Checks
 

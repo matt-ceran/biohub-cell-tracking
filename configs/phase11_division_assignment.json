@@ -1,0 +1,74 @@
+{
+  "conflict_rules": {
+    "allow_daughter_as_later_frame_mother": true,
+    "reject_daughter_already_assigned_to_accepted_fork": true,
+    "reject_mother_already_has_fork": true
+  },
+  "contract_name": "phase11_division_assignment",
+  "cross_contract_sha256": {
+    "acceptance": "6f3678436d9b11f61a1f17b068f8543452d9b3089a9d258360934a59696a9c5c",
+    "proposal": "83ec5cb8818cab4470cc00c90e3d34aa23d01bcd90e2f4619031bc17a7630f80",
+    "sampling": "35cc862afb4c87bcdd975e6662fe3e0716a768bc906eebd3c815fb2c630a3806",
+    "split": "974cda6c2cc907c0ac71af93ee969bcd151bb42b0ad56343a307aa2942ba6ecb"
+  },
+  "division_assignment_schema_version": 1,
+  "fallback_graph": "exact_phase10_divisions_off_pruned_graph",
+  "max_forks_per_movie": 5,
+  "movie_order": [
+    "score:descending",
+    "edge_removal_count:ascending",
+    "restored_node_count:ascending",
+    "mother_id:ascending",
+    "candidate_1_id:ascending",
+    "candidate_2_id:ascending"
+  ],
+  "per_mother_selection": {
+    "keep": "highest_scoring_pair",
+    "score_gate": "greater_than_or_equal_to_threshold",
+    "tie_break": [
+      "edge_removal_count:ascending",
+      "restored_node_count:ascending",
+      "candidate_1_id:ascending",
+      "candidate_2_id:ascending"
+    ]
+  },
+  "source_fingerprints": {
+    "division_data_sha256": "5463fc33a577ed53decc25c0b05f21a90f2bea04286e1a83a80a7fb1847b1026",
+    "freeze_division_contracts_sha256": "b3d236911f4262e8896464d7a2ea4cc543e87f2e33c4114f1cac29481a6eb006",
+    "io_sha256": "8511fc19f4acd4981d495fb8d1d0f3896824919dc5b1e6f37b60d6192553f289",
+    "metric_sha256": "1e935ceb00e26705ff1ccc7a548547dd4742a8ea5f74ae7e0d03eac29ee03dd2"
+  },
+  "threshold_grid": [
+    0.5,
+    0.7,
+    0.8,
+    0.9,
+    0.95,
+    0.975,
+    0.99,
+    0.995,
+    0.999,
+    0.9995,
+    0.9999
+  ],
+  "transaction": {
+    "mutation_steps": [
+      "restore_missing_members_from_raw_score_cache_graph",
+      "remove_competing_mother_t_plus_1_child_outside_pair",
+      "remove_daughter_incoming_edge_from_wrong_parent",
+      "add_two_mother_to_daughter_edges",
+      "preserve_all_unrelated_nodes_histories_futures_and_edges"
+    ],
+    "no_fork_result": "logical_graph_sha256_equal_to_fallback",
+    "rollback": "whole_movie_returns_untouched_fallback_on_any_failure",
+    "validation_invariants": [
+      "distinct_daughters",
+      "exact_t_to_t_plus_1_timing",
+      "daughter_indegree_at_most_one",
+      "outdegree_at_most_two",
+      "unique_edges",
+      "all_edge_endpoints_present",
+      "acyclic"
+    ]
+  }
+}

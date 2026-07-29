@@ -1,0 +1,88 @@
+{
+  "contract_name": "phase11_division_sampling",
+  "cross_contract_sha256": {
+    "proposal": "83ec5cb8818cab4470cc00c90e3d34aa23d01bcd90e2f4619031bc17a7630f80",
+    "split": "974cda6c2cc907c0ac71af93ee969bcd151bb42b0ad56343a307aa2942ba6ecb"
+  },
+  "division_sampling_schema_version": 1,
+  "matched_nondivision_controls": {
+    "hardest_pair_order": [
+      "minimum_cellness:descending",
+      "restored_node_count:ascending",
+      "edge_removal_count:ascending",
+      "candidate_1_id:ascending",
+      "candidate_2_id:ascending"
+    ],
+    "max_mothers_per_movie": 32,
+    "mother_rank": {
+      "algorithm": "sha256",
+      "encoding": "salt_nul_dataset_nul_mother_id_ascii",
+      "salt": "biohub-phase11-division-matched-control-v1"
+    },
+    "pairs_per_mother": 1,
+    "source_role": "fit",
+    "supervised": true
+  },
+  "positive_records": {
+    "include": "all_recoverable_fit_truth_triplets",
+    "required_matches": [
+      "filtered_mother",
+      "raw_candidate_1",
+      "raw_candidate_2"
+    ],
+    "source_role": "fit",
+    "supervised": true
+  },
+  "record_identity_fields": [
+    "dataset",
+    "mother_id",
+    "candidate_1_id",
+    "candidate_2_id",
+    "sampling_stratum",
+    "source_role",
+    "node_references",
+    "minimum_cellness",
+    "restored_node_count",
+    "edge_removal_count",
+    "deterministic_rank"
+  ],
+  "same_mother_alternatives": {
+    "eligibility": "non_true_pair_at_truth_mother_with_exactly_two_known_daughters",
+    "hardness_order": [
+      "minimum_cellness:descending",
+      "restored_node_count:ascending",
+      "edge_removal_count:ascending",
+      "candidate_1_id:ascending",
+      "candidate_2_id:ascending"
+    ],
+    "max_pairs_per_mother": 12,
+    "source_role": "fit",
+    "supervised": true
+  },
+  "source_fingerprints": {
+    "division_data_sha256": "5463fc33a577ed53decc25c0b05f21a90f2bea04286e1a83a80a7fb1847b1026",
+    "freeze_division_contracts_sha256": "b3d236911f4262e8896464d7a2ea4cc543e87f2e33c4114f1cac29481a6eb006",
+    "io_sha256": "8511fc19f4acd4981d495fb8d1d0f3896824919dc5b1e6f37b60d6192553f289",
+    "metric_sha256": "1e935ceb00e26705ff1ccc7a548547dd4742a8ea5f74ae7e0d03eac29ee03dd2"
+  },
+  "supervised_batches": {
+    "diagnostics_in_gradient_updates": false,
+    "repeat_smaller_strata_deterministically": true,
+    "stratum_ratio": {
+      "matched_nondivision_control": 1,
+      "positive": 1,
+      "same_mother_negative": 1
+    }
+  },
+  "unmatched_diagnostics": {
+    "loss_weight": 0.0,
+    "max_proposals_per_movie": 32,
+    "proposal_rank": {
+      "algorithm": "sha256",
+      "encoding": "salt_nul_dataset_nul_mother_id_nul_candidate_1_id_nul_candidate_2_id_ascii",
+      "salt": "biohub-phase11-division-unmatched-diagnostic-v1"
+    },
+    "source_role": "fit",
+    "supervised": false
+  }
+}

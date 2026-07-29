@@ -1,0 +1,103 @@
+{
+  "contract_name": "phase11_division_proposal",
+  "cross_contract_sha256": {
+    "split": "974cda6c2cc907c0ac71af93ee969bcd151bb42b0ad56343a307aa2942ba6ecb"
+  },
+  "division_proposal_schema_version": 1,
+  "pair_audit": {
+    "cohort": "exact_phase10_internal_dev",
+    "datasets": [
+      "6bba_474be664",
+      "6bba_4f99ce20",
+      "6bba_6ca87370",
+      "6bba_789f8168",
+      "6bba_7af54fde",
+      "6bba_825bd1c6",
+      "6bba_907271db",
+      "6bba_afb141ff",
+      "6bba_d1acb6ff",
+      "6bba_ebdf3b34",
+      "6bba_ef7b4f7e",
+      "6bba_f4ae811c",
+      "6bba_fc5f39dc"
+    ],
+    "labelled_event_coverage": 18,
+    "outputs": {
+      "events_csv": {
+        "path": "data/working/phase11_division_audit/full13_pairs/division_events.csv",
+        "sha256": "deda36a3b75a08bf58c4862720765fd4622f10bef20362f5615a7baf72c19b88"
+      },
+      "proposals_csv": {
+        "path": "data/working/phase11_division_audit/full13_pairs/selected_pair_proposals.csv",
+        "sha256": "7617b3cc902e81b609d810c46f895d6d75633eb368ac07f0b1d3f279ad63a660"
+      },
+      "rule_movies_csv": {
+        "path": "data/working/phase11_division_audit/full13_pairs/rule_movies.csv",
+        "sha256": "bcf2dac0c3b0c13be6fd4172380b6252723a763eeae05383d1163a90485964d4"
+      },
+      "rule_sweep_csv": {
+        "path": "data/working/phase11_division_audit/full13_pairs/rule_sweep.csv",
+        "sha256": "04efc864348c4c9da4e8bc8e51a9396d4227cb51edcdea0137c183e57697848d"
+      },
+      "selected_movies_csv": {
+        "path": "data/working/phase11_division_audit/full13_pairs/selected_movies.csv",
+        "sha256": "c2bc6ff67b46de1fb8056bbad333311e8b9ea1466ca051b1dddff5ccb2d02f7a"
+      }
+    },
+    "pair_audit_schema_version": 1,
+    "source_files": [
+      "src/biohub/division.py",
+      "scripts/audit_division_proposals.py",
+      "scripts/audit_division_pair_proposals.py"
+    ],
+    "source_sha256": "01533bf5362e05aa2cf7147cfb825e82dae79ef992d4196373710219288372a0",
+    "summary_path": "data/working/phase11_division_audit/full13_pairs/summary.json",
+    "summary_sha256": "af12eef7d4621daf0ce877beccd77497ccf664f1974a49b1725182f8c2b3b010"
+  },
+  "phase10_inputs": {
+    "checkpoint_path": "data/working/appearance_checkpoints/cellness_cnn_phase10_full.pt",
+    "checkpoint_sha256": "bd35d082c985641728bc340817d08d4750a3c83c34d25f99d1507cbc8b7bb8d4",
+    "evaluation_source_files": [
+      "src/biohub/appearance.py",
+      "src/biohub/appearance_model.py",
+      "src/biohub/detect.py",
+      "src/biohub/io.py",
+      "src/biohub/constants.py",
+      "src/biohub/appearance_evaluation.py",
+      "src/biohub/link.py",
+      "src/biohub/metric.py",
+      "scripts/freeze_appearance_policy.py",
+      "scripts/validate_appearance.py"
+    ],
+    "evaluation_source_sha256": "be227a8d94434ba401209ba0ada2864e5ad4a49b8ace941b86c5c5f109d571f9",
+    "frozen_policy_path": "data/working/phase10_frozen_candidate_policy.json",
+    "frozen_policy_sha256": "1a333aa0cf3c1c5b92cdfc468fdbc483567a8bde2f4d2e73bd2332069144f3fc",
+    "scoring_source_files": [
+      "src/biohub/appearance.py",
+      "src/biohub/appearance_model.py",
+      "src/biohub/detect.py",
+      "src/biohub/io.py",
+      "src/biohub/constants.py"
+    ],
+    "scoring_source_sha256": "426c09f04c99af55fd5457921fbf435de2f71bdf7ce08dbdf0e0fde6c02443c9"
+  },
+  "proposal_rule": {
+    "candidate_order": [
+      "distance_um:ascending",
+      "node_id:ascending"
+    ],
+    "candidate_source": "raw_scored",
+    "max_candidates_per_mother": 12,
+    "max_distance_um": 16.0,
+    "min_angle_deg": 0.0,
+    "min_distance_um": 0.0,
+    "mother_source": "cnn_filtered_preprune",
+    "rule_id": "dmax16_cap12_dmin0_angle0"
+  },
+  "source_fingerprints": {
+    "division_data_sha256": "5463fc33a577ed53decc25c0b05f21a90f2bea04286e1a83a80a7fb1847b1026",
+    "freeze_division_contracts_sha256": "b3d236911f4262e8896464d7a2ea4cc543e87f2e33c4114f1cac29481a6eb006",
+    "io_sha256": "8511fc19f4acd4981d495fb8d1d0f3896824919dc5b1e6f37b60d6192553f289",
+    "metric_sha256": "1e935ceb00e26705ff1ccc7a548547dd4742a8ea5f74ae7e0d03eac29ee03dd2"
+  }
+}
