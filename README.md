@@ -10,14 +10,14 @@ The retained pipeline uses DoG k=3 proposals, a CNN score threshold of 0.20, who
 It improved mean local edge Jaccard from 0.668489 to 0.674186 while reducing aggregate predicted-to-estimated node ratio from 1.446x to 1.303x and raising sparse-label recall from 0.876371 to 0.894906.
 The learned policy won, tied, and lost on 36, 4, and 31 movies respectively, and its median edge Jaccard was slightly lower, so the improvement is real but modest and heterogeneous.
 Geometric division repair remains off because it measured as a net loss.
-Phase 11 reproduced the frozen Phase 10 path on all 13 internal-development movies and audited 18 sparse labelled divisions.
-All 18 mother-and-two-daughter triplets existed at raw DoG, 16 survived the CNN filter, only 4 formed a correct linked-daughter plus orphan-daughter triplet before pruning, and none retained that structure after minimum-length-6 pruning.
-A broader pre-prune pair audit recovered all 18 events only by using filtered mothers, raw-scored daughter candidates within 16 micrometers, and up to 12 nearest candidates per mother.
-That smallest full-coverage rule still produced 22,308,810 proposals on 13 movies, so Phase 11 now freezes the split, proposal, sampling, full-score acceptance, and fork-assignment contracts before fitting any division head.
-The frozen `6bba` split contains 88 fit movies, 20 development movies, and 20 locked evaluation movies.
-The current-source fit and development cache runs produced 108 strictly validated node caches containing 8,121,994 candidates, while evaluation remains unopened.
-The next execution step is to build the sampled fit dataset and fit-only feature schema from the 88 fit caches.
-No division head has been production-trained and no development policy has been selected yet.
+Phase 11 reproduced the frozen Phase 10 path, froze a bounded high-recall mother-and-daughter proposal rule, and built 108 strictly validated node caches for 88 fit movies and 20 development movies.
+The sampled fit dataset contains 6,620 records, including 3,804 supervised records and 2,816 zero-weight diagnostic unknowns.
+The frozen proposal rule represents 76 of 89 known fit divisions and 10 of 18 known development divisions, so the division heads cannot learn or recover events whose correct triplets are missing.
+The fixed `scalar`, `embedding_linear`, and `embedding_mlp32` heads each completed exactly 100 production epochs on the fit cohort.
+Their final fit losses were 0.299763, 0.179191, and 0.000540 respectively, but fit loss does not select a model or prove movie-level improvement.
+The complete [Phase 11 fixed-head training record](experiments/2026-08-02-phase11-fixed-head-training.md) preserves the commands, data identities, artifact hashes, runtime, validation evidence, and interpretation limits.
+The next experiment is the complete 660-row development grid, and no head, threshold, or division policy has been selected yet.
+All 20 evaluation caches remain absent and evaluation remains fail-closed.
 
 ## Layout
 
