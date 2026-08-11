@@ -20,6 +20,11 @@ The complete 660-row development grid has now evaluated all 20 development movie
 None of the 33 policies passed every frozen guard, and none recovered one exact mother-plus-two-daughters triplet.
 At the strictest threshold of 0.9999, scalar, embedding-linear, and embedding-MLP32 still created 7, 63, and 98 strict false forks respectively.
 The complete [Phase 11 development-grid record](experiments/2026-08-11-phase11-development-grid.md) preserves the command, full failure pattern, guard results, hashes, validation evidence, and stop-before-policy-freezing boundary.
+The development-only truth-rank atlas has now traced all 18 labelled division events through proposal generation, head ranking, thresholds, and movie assignment.
+The frozen proposal rule exposed 10 exact truths and hid 8 before scoring: 4 lacked a raw true daughter, 2 lacked the linked mother, and 2 placed a daughter beyond the nearest-12 cap.
+Among the 10 reachable truths, scalar, embedding-linear, and embedding-MLP32 placed the exact pair first for 1, 0, and 3 events respectively.
+None survived assignment because most lost to a wrong same-mother pair or fell below threshold, while all four head-event rank-1 results were crowded out by higher-scoring false mothers at the five-fork movie cap.
+The complete [Phase 11 truth-rank atlas record](experiments/2026-08-11-phase11-truth-rank-atlas.md) preserves the event ranks, stopping stages, contact-sheet evidence, artifact identities, and next modeling workstreams.
 No division policy has been frozen and no development winner exists.
 All 20 evaluation caches remain absent and evaluation remains fail-closed.
 
@@ -201,6 +206,17 @@ The exact reproduction command uses the frozen default CPU execution contract.
 .venv/bin/python -u scripts/validate_division_model.py \
   --cohort development
 ```
+
+Replay the exact known truth proposals through the completed grid and generate the development-only contact-sheet atlas.
+
+```bash
+.venv/bin/python -u scripts/audit_division_truth_ranks.py \
+  --cohort development
+```
+
+The atlas separates proposal recall, within-mother ranking, thresholding, and movie-wide assignment failures.
+It writes canonical JSON plus 10 mother-and-daughter contact sheets under ignored `data/working/phase11_division_truth_rank_atlas/`.
+It does not alter model weights, select a policy, or open evaluation.
 
 After explicit review, freeze the development rejection.
 The freezer will record `evaluation_unlocked=false` and leave the accepted divisions-off fallback unchanged.
