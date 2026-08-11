@@ -16,7 +16,11 @@ The frozen proposal rule represents 76 of 89 known fit divisions and 10 of 18 kn
 The fixed `scalar`, `embedding_linear`, and `embedding_mlp32` heads each completed exactly 100 production epochs on the fit cohort.
 Their final fit losses were 0.299763, 0.179191, and 0.000540 respectively, but fit loss does not select a model or prove movie-level improvement.
 The complete [Phase 11 fixed-head training record](experiments/2026-08-02-phase11-fixed-head-training.md) preserves the commands, data identities, artifact hashes, runtime, validation evidence, and interpretation limits.
-The next experiment is the complete 660-row development grid, and no head, threshold, or division policy has been selected yet.
+The complete 660-row development grid has now evaluated all 20 development movies across all three heads and eleven thresholds.
+None of the 33 policies passed every frozen guard, and none recovered one exact mother-plus-two-daughters triplet.
+At the strictest threshold of 0.9999, scalar, embedding-linear, and embedding-MLP32 still created 7, 63, and 98 strict false forks respectively.
+The complete [Phase 11 development-grid record](experiments/2026-08-11-phase11-development-grid.md) preserves the command, full failure pattern, guard results, hashes, validation evidence, and stop-before-policy-freezing boundary.
+No division policy has been frozen and no development winner exists.
 All 20 evaluation caches remain absent and evaluation remains fail-closed.
 
 ## Layout
@@ -190,14 +194,18 @@ The scalar head uses only the 58 context values, the embedding-linear head uses 
 .venv/bin/python -u scripts/train_division.py --all --device mps
 ```
 
-Run the complete 660-row development grid, then freeze the best policy only if every declared guard passes.
-If no policy passes, the freezer records `evaluation_unlocked=false` and the accepted divisions-off fallback remains unchanged.
+The complete 660-row development grid has run and found no policy that passes every declared guard.
+The exact reproduction command uses the frozen default CPU execution contract.
 
 ```bash
 .venv/bin/python -u scripts/validate_division_model.py \
-  --cohort development \
-  --device mps
+  --cohort development
+```
 
+After explicit review, freeze the development rejection.
+The freezer will record `evaluation_unlocked=false` and leave the accepted divisions-off fallback unchanged.
+
+```bash
 .venv/bin/python scripts/freeze_division_policy.py
 ```
 
