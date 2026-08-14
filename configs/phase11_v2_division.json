@@ -1,0 +1,88 @@
+{
+  "activation_keyword": "ATLASFORGE",
+  "calibration": {
+    "acceptance_rule": "all_fold_gates_clear_fold_threshold",
+    "control_mothers_per_movie": 32,
+    "loss": "balanced_binary_cross_entropy",
+    "threshold_rule": "next_float_above_max_heldout_matched_control"
+  },
+  "cross_validation": {
+    "fold_count": 5,
+    "group": "movie",
+    "salt": "biohub-phase11-v2-movie-fold-v1"
+  },
+  "development_audit": {
+    "can_freeze_policy": false,
+    "mode": "single_post_selection_diagnostic",
+    "uses_evaluation": false
+  },
+  "evaluation_unlocked": false,
+  "experiment_name": "phase11_v2_atlasforge",
+  "model_ladder": [
+    "context_linear",
+    "full_linear",
+    "full_mlp16"
+  ],
+  "optimization": {
+    "gate_epochs": 180,
+    "learning_rate": 0.01,
+    "ranker_epochs": 120,
+    "seed": 260813,
+    "weight_decay": 0.001
+  },
+  "promotion_guards": {
+    "max_control_proposal_ratio_vs_v1": 2.0,
+    "max_pairs_per_mother": 138,
+    "max_total_proposal_ratio_vs_v1": 2.0,
+    "minimum_fit_reachable_events": 81,
+    "preserve_all_v1_reachable_fit_events": true,
+    "require_zero_heldout_selected_control_accepts": true
+  },
+  "proposal_rule": {
+    "anchor_candidate_cap": 6,
+    "base_candidate_cap": 12,
+    "candidate_order": [
+      "distance_um:ascending",
+      "node_id:ascending"
+    ],
+    "candidate_source": "raw_scored",
+    "max_distance_um": 18.0,
+    "max_pairs_per_mother": 138,
+    "mother_source": "cnn_filtered_preprune",
+    "outer_pair_rule": "anchor_to_outer_only",
+    "scan_candidate_cap": 24
+  },
+  "ranking": {
+    "loss": "event_balanced_listwise_softmax",
+    "selection_order": [
+      "two_stage_oof_recoveries:descending",
+      "shared_v1_oof_top1:descending",
+      "all_reachable_oof_top1:descending",
+      "all_reachable_oof_top3:descending",
+      "ranker_parameter_count:ascending",
+      "gate_parameter_count:ascending",
+      "ranker_name:ascending",
+      "gate_name:ascending"
+    ]
+  },
+  "source_cohort": {
+    "embryo": "6bba",
+    "role": "fit"
+  },
+  "training_data": {
+    "base_dataset": "data/working/phase11_division_dataset/fit_complete",
+    "base_strata": [
+      "positive",
+      "same_mother_negative",
+      "matched_nondivision_control"
+    ],
+    "v2_expansion": "all_bounded_pairs_for_newly_reachable_fit_events"
+  },
+  "v1_reference": {
+    "development_truth_rank_atlas_sha256": "6d177858354dc4f94d88571d5ec320819fe74883cf1b60355a755f33bc0f5d0a",
+    "fit_reachable_events": 76,
+    "max_candidates_per_mother": 12,
+    "max_distance_um": 16.0
+  },
+  "version": 1
+}

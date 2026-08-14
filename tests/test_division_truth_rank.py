@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from pathlib import Path
 
 import pytest
 
@@ -16,8 +17,57 @@ from biohub.division_truth_rank import (
     classify_threshold_outcome,
     rank_truth_proposal,
 )
+from scripts.audit_division_truth_ranks import verify_existing_atlas
 
 FALLBACK_SHA256 = hashlib.sha256(b"fallback").hexdigest()
+
+
+def test_verify_existing_atlas_checks_manifest_and_contact_sheet_hashes(
+    tmp_path: Path,
+) -> None:
+    from biohub.division_data import file_sha256, write_canonical_json
+
+    atlas_dir = tmp_path / "atlas"
+    images = atlas_dir / "images"
+    images.mkdir(parents=True)
+    contact = images / "event.png"
+    contact.write_bytes(b"png payload")
+    atlas = atlas_dir / "atlas.json"
+    write_canonical_json(
+        atlas,
+        {
+            "complete": True,
+            "evaluation_boundary": {
+                "evaluation_cache_count": 0,
+                "evaluation_opened": False,
+                "phase11_development_result_exists": False,
+                "phase11_policy_exists": False,
+            },
+            "summary": {
+                "reachable_truth_event_count": 1,
+                "truth_event_count": 1,
+            },
+            "truth_rank_atlas_schema_version": 1,
+        },
+    )
+    write_canonical_json(
+        atlas_dir / "manifest.json",
+        {
+            "atlas": {"path": "atlas.json", "sha256": file_sha256(atlas)},
+            "contact_sheets": [
+                {"path": "images/event.png", "sha256": file_sha256(contact)}
+            ],
+            "logical_content_sha256": "unused-by-this-fixture",
+            "manifest_schema_version": 1,
+        },
+    )
+
+    payload = verify_existing_atlas(atlas_dir)
+
+    assert payload["complete"]
+    contact.write_bytes(b"changed")
+    with pytest.raises(ValueError, match="contact-sheet SHA-256"):
+        verify_existing_atlas(atlas_dir)
 
 
 def proposal(

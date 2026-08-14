@@ -38,6 +38,7 @@ from biohub.division_data import (  # noqa: E402
     canonical_json_sha256,
     file_sha256,
     logical_graph_sha256,
+    read_canonical_json,
     read_division_contracts,
     source_bundle_sha256,
     truth_divisions,
@@ -106,6 +107,50 @@ def _project_relative(path: str | Path, *, project_root: Path) -> str:
         return resolved.relative_to(project_root.resolve()).as_posix()
     except ValueError as exc:
         raise ValueError("truth-rank artifacts must remain inside the project root") from exc
+
+
+def verify_existing_atlas(output_dir: str | Path) -> dict[str, Any]:
+    """Verify an immutable atlas and every artifact recorded by its manifest."""
+    output = Path(output_dir)
+    atlas_path = output / "atlas.json"
+    manifest = read_canonical_json(output / "manifest.json")
+    if manifest.get("manifest_schema_version") != 1:
+        raise ValueError("truth-rank atlas manifest has an unsupported schema")
+    atlas_record = manifest.get("atlas")
+    if not isinstance(atlas_record, Mapping) or atlas_record.get("path") != "atlas.json":
+        raise ValueError("truth-rank atlas manifest has an invalid atlas record")
+    if file_sha256(atlas_path) != atlas_record.get("sha256"):
+        raise ValueError("truth-rank atlas SHA-256 does not match its manifest")
+    payload = read_canonical_json(atlas_path)
+    if payload.get("truth_rank_atlas_schema_version") != TRUTH_RANK_ATLAS_SCHEMA_VERSION:
+        raise ValueError("truth-rank atlas has an unsupported schema")
+    if payload.get("complete") is not True:
+        raise ValueError("truth-rank atlas is incomplete")
+    boundary = payload.get("evaluation_boundary")
+    if boundary != {
+        "evaluation_cache_count": 0,
+        "evaluation_opened": False,
+        "phase11_development_result_exists": False,
+        "phase11_policy_exists": False,
+    }:
+        raise ValueError("truth-rank atlas crossed its frozen evaluation boundary")
+    contact_sheets = manifest.get("contact_sheets")
+    if not isinstance(contact_sheets, list):
+        raise ValueError("truth-rank atlas manifest has invalid contact-sheet records")
+    expected_count = payload["summary"]["reachable_truth_event_count"]
+    if len(contact_sheets) != expected_count:
+        raise ValueError("truth-rank atlas contact-sheet count is inconsistent")
+    for record in contact_sheets:
+        if not isinstance(record, Mapping) or set(record) != {"path", "sha256"}:
+            raise ValueError("truth-rank atlas has an invalid contact-sheet record")
+        path = output / str(record["path"])
+        try:
+            path.resolve().relative_to(output.resolve())
+        except ValueError as exc:
+            raise ValueError("truth-rank atlas contact sheet escapes its output directory") from exc
+        if file_sha256(path) != record["sha256"]:
+            raise ValueError("truth-rank atlas contact-sheet SHA-256 changed")
+    return payload
 
 
 def _proposal_payload(proposal: ScoredProposal | AcceptedFork | None) -> dict[str, Any] | None:
@@ -890,11 +935,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grid", type=Path, default=DEFAULT_GRID)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--verify-existing",
+        action="store_true",
+        help="verify the existing atlas and every recorded artifact without rebuilding",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
+    if args.verify_existing:
+        payload = verify_existing_atlas(args.output_dir)
+        atlas_path = args.output_dir / "atlas.json"
+        print(
+            "Verified Phase 11 truth-rank atlas: "
+            f"events={payload['summary']['truth_event_count']} "
+            f"reachable={payload['summary']['reachable_truth_event_count']} "
+            f"sha256={file_sha256(atlas_path)} "
+            f"path={atlas_path}",
+            flush=True,
+        )
+        return
     payload = run_truth_rank_atlas(
         data_root=args.data_root,
         cache_dir=args.cache_dir,
