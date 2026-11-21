@@ -10,7 +10,10 @@ requires-python = ">=3.11"
 dependencies = [
   "kaggle",
   "matplotlib",
-  "networkx",
+  # NetworkX 3.7 requires Python >= 3.12; keep the previously supported 3.11
+  # interpreters on the latest release that still supports them.
+  "networkx>=3.7; python_version >= '3.12'",
+  "networkx; python_version < '3.12'",
   "numpy",
   "pandas",
   "scikit-image",
